@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智核 (WiseCore)智能体</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        
+        .chat-bubble { max-width: 85%; transition: all 0.2s ease; }
+        .markdown-body pre { background: #1e293b; color: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
+        .markdown-body code { font-family: 'Fira Code', monospace; background: #f1f5f9; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.9em; }
+        .markdown-body pre code { background: transparent; padding: 0; }
+        .markdown-body ul, .markdown-body ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+        .markdown-body li { margin-bottom: 0.25rem; }
+        .markdown-body blockquote { border-left: 4px solid #e2e8f0; padding-left: 1rem; color: #64748b; font-style: italic; }
+        
+        .thought-container { 
+            border-left: 3px solid #3b82f6;
+            background: #eff6ff;
+            margin: 0.5rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+            overflow: hidden;
+        }
+        .thought-header {
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #1e40af;
+            font-weight: 500;
+        }
+        .thought-header:hover { background: #dbeafe; }
+        .thought-content {
+            padding: 0.5rem 1rem;
+            color: #1e3a8a;
+            font-size: 0.85rem;
+            border-top: 1px solid #dbeafe;
+            white-space: pre-wrap;
+        }
+        .tool-log { 
+            background: #0f172a; 
+            color: #38bdf8;
+            padding: 0.75rem; 
+            border-radius: 0.5rem; 
+            font-family: 'Fira Code', monospace; 
+            font-size: 0.75rem; 
+            margin: 0.5rem 0;
+            box-shadow: inset 0 2px4 0 rgba(0, 0, 0, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+        .tool-result { color: #10b981; }
+        .tool-args { color: #94a3b8; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        
+        .hidden-thought .thought-container { display: none; }
+        
+        #skillsPanel {
+            transition: transform 0.3s ease-in-out;
+        }
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #94a3b8;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+            margin-top: 1.5rem;
+            font-weight: 600;
+        }
+        .server-card {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background: #f8fafc;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid #f1f5f9;
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+        .status-online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+        .status-offline { background: #ef4444; }
+
+        .skill-card {
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+            background: white;
+            transition: all 0.2s;
+        }
+        .skill-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .typing-indicator {
+            display: flex;
+            padding: 1rem;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            border-top-left-radius: 0;
+            width: fit-content;
+            margin-top: 1rem;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #94a3b8;
+            border-radius: 50%;
+            margin: 0 3px;
+            animation: typing 1.4s infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 h-screen flex overflow-hidden">
+    <aside id="skillsPanel" class="w-80 bg-white border-r flex flex-col h-full z-20 shadow-xl lg:translate-x-0 -translate-x-full fixed lg:relative">
+        <div class="p-6 border-b flex items-center justify-between">
+            <h2 class="font-bold text-slate-800 flex items-center text-lg">
+                <i class="fas fa-layer-group mr-2 text-blue-600"></i> 控制面板
+            </h2>
+            <button id="closeSkills" class="lg:hidden text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-4 px-6">
+            <div class="section-title">已连接 MCP 服务</div>
+            <div id="mcpServersList">
+                <div class="animate-pulse space-y-2">
+                    <div class="h-10 bg-slate-100 rounded-lg"></div>
+                </div>
+            </div>
+
+            <div class="section-title">已安装技能</div>
+            <div id="skillsList" class="space-y-3">
+                <div class="animate-pulse space-y-4">
+                    <div class="h-20 bg-slate-100 rounded-xl"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-slate-50 border-t text-[10px] text-slate-400 text-center uppercase tracking-widest">
+            <span id="serverCount">0</span> Servers · <span id="skillCount">0</span> Skills
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col h-full relative">
+        <header class="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-10">
+            <div class="flex items-center space-x-3">
+                <button id="openSkills" class="lg:hidden bg-slate-100 p-2 rounded-lg text-slate-600">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <i class="fas fa-brain text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800">智核 <span class="text-blue-600">WiseCore</span></h1>
+                    <p class="text-xs text-green-500 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                        模型已就绪: Qwen3:4b
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-sm text-slate-600">
+                    <label class="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggleThought" class="sr-only peer" checked>
+                        <div class="relative w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ms-2 text-xs font-medium">显示思考</span>
+                    </label>
+                </div>
+                <button id="clearBtn" class="text-slate-400 hover:text-red-500 transition-colors p-2" title="清除历史记录">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <main id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex justify-start">
+                <div class="chat-bubble bg-white border p-5 rounded-2xl rounded-tl-none shadow-sm border-slate-200">
+                    <div class="markdown-body text-slate-700 leading-relaxed">
+                        你好！我是你的智能助手 **WiseCore**。我可以帮你生成图片、回答问题等。
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="typingIndicator" class="hidden px-6 pb-4">
+            <div class="typing-indicator shadow-sm">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <span class="ml-2 text-xs text-slate-400">正在思考...</span>
+            </div>
+        </div>
+
+        <footer class="bg-white border-t p-6 shadow-2xl">
+            <div class="max-w-4xl mx-auto flex items-end space-x-4">
+                <div class="flex-1 relative bg-slate-50 rounded-2xl border border-slate-200 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                    <textarea id="userInput" rows="1" class="w-full bg-transparent border-none rounded-2xl py-4 px-5 pr-14 focus:ring-0 resize-none max-h-40 overflow-y-auto" placeholder="给智能体发送指令..."></textarea>
+                    <button id="sendBtn" class="absolute right-3 bottom-3 bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-all disabled:opacity-50 shadow-lg shadow-blue-200">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const skillsList = document.getElementById('skillsList');
+        const mcpServersList = document.getElementById('mcpServersList');
+        const skillCount = document.getElementById('skillCount');
+        const serverCount = document.getElementById('serverCount');
+        const toggleThought = document.getElementById('toggleThought');
+        const openSkills = document.getElementById('openSkills');
+        const closeSkills = document.getElementById('closeSkills');
+        const skillsPanel = document.getElementById('skillsPanel');
+        const typingIndicator = document.getElementById('typingIndicator');
+
+        let ws;
+        let currentAiBubble = null;
+        let isProcessing = false;
+        let accumulatedText = "";
+
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.hostname}:8002/ws`);
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                
+                if (msg.type === 'init_data') {
+                    renderMcpServers(msg.mcp_servers);
+                    renderSkills(msg.skills);
+                } else if (msg.type === 'start_typing') {
+                    typingIndicator.classList.remove('hidden');
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (msg.type === 'content') {
+                    typingIndicator.classList.add('hidden');
+                    if (!currentAiBubble) createAiBubble();
+                    accumulatedText += msg.data;
+                    renderAiResponse();
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (msg.type === 'tool_call') {
+                    typingIndicator.classList.add('hidden');
+                    const log = document.createElement('div');
+                    log.className = 'tool-log';
+                    log.innerHTML = `<div class="flex items-center mb-1"><i class="fas fa-cog fa-spin mr-2"></i><strong>调用工具:</strong> <span class="ml-1">${msg.name}</span></div><div class="tool-args text-[0.7rem]">参数: ${JSON.stringify(msg.args)}</div>`;
+                    currentAiBubble.appendChild(log);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (msg.type === 'image') {
+                    if (!currentAiBubble) createAiBubble();
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'mt-3 mb-1';
+                    imgDiv.innerHTML = `<img src="data:${msg.mimeType};base64,${msg.data}" class="max-w-full rounded-lg shadow-md hover:shadow-xl transition-shadow cursor-pointer" onclick="window.open(this.src)" alt="Generated Image">`;
+                    currentAiBubble.querySelector('.content-text').appendChild(imgDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (msg.type === 'tool_result') {
+                    const logs = currentAiBubble.querySelectorAll('.tool-log');
+                    const lastLog = logs[logs.length - 1];
+                    if (lastLog) {
+                        const resultDiv = document.createElement('div');
+                        resultDiv.className = 'tool-result text-[0.7rem] mt-1 border-t border-slate-700 pt-1';
+                        resultDiv.innerHTML = `<strong>结果:</strong> ${msg.data}`;
+                        lastLog.appendChild(resultDiv);
+                    }
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (msg.type === 'error') {
+                    typingIndicator.classList.add('hidden');
+                    if (!currentAiBubble) createAiBubble();
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm mt-2';
+                    errDiv.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i>${msg.data}`;
+                    currentAiBubble.appendChild(errDiv);
+                } else if (msg.type === 'done') {
+                    typingIndicator.classList.add('hidden');
+                    currentAiBubble = null;
+                    accumulatedText = "";
+                    isProcessing = false;
+                    sendBtn.disabled = false;
+                    userInput.disabled = false;
+                    userInput.focus();
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                setTimeout(connect, 3000);
+            };
+        }
+
+        function renderMcpServers(servers) {
+            mcpServersList.innerHTML = '';
+            serverCount.innerText = servers.length;
+            servers.forEach(server => {
+                const div = document.createElement('div');
+                div.className = 'server-card';
+                const isOnline = server.status === "已连接";
+                div.innerHTML = `
+                    <div class="status-dot ${isOnline ? 'status-online' : 'status-offline'}"></div>
+                    <div class="text-sm font-medium text-slate-700">${server.name}</div>
+                    <div class="ml-auto text-[10px] text-slate-400">${server.status}</div>
+                `;
+                mcpServersList.appendChild(div);
+            });
+        }
+
+        function renderSkills(skills) {
+            skillsList.innerHTML = '';
+            skillCount.innerText = skills.length;
+            skills.forEach(skill => {
+                const div = document.createElement('div');
+                div.className = 'skill-card';
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-blue-600 text-sm">${skill.name}</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-mono">${skill.server}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 line-clamp-2">${skill.description || '无描述'}</p>
+                `;
+                skillsList.appendChild(div);
+            });
+        }
+
+        function createAiBubble() {
+            const div = document.createElement('div');
+            div.className = 'flex justify-start';
+            div.innerHTML = `
+                <div class="chat-bubble bg-white border border-slate-200 p-5 rounded-2xl rounded-tl-none shadow-sm">
+                    <div class="pre-thought-content markdown-body text-slate-700 leading-relaxed mb-2 hidden"></div>
+                    <div class="thought-container hidden">
+                        <div class="thought-header" onclick="toggleThisThought(this)">
+                            <i class="fas fa-brain mr-2"></i>
+                            思考过程
+                            <i class="fas fa-chevron-right ml-auto transition-transform"></i>
+                        </div>
+                        <div class="thought-content hidden"></div>
+                    </div>
+                    <div class="content-text markdown-body text-slate-700 leading-relaxed"></div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            currentAiBubble = div.querySelector('.chat-bubble');
+            if (!toggleThought.checked) currentAiBubble.classList.add('hidden-thought');
+        }
+
+        function renderAiResponse() {
+            const preThought = currentAiBubble.querySelector('.pre-thought-content');
+            const thoughtContainer = currentAiBubble.querySelector('.thought-container');
+            const thoughtContent = currentAiBubble.querySelector('.thought-content');
+            const contentText = currentAiBubble.querySelector('.content-text');
+
+            let processedText = accumulatedText;
+            const thoughtStartTag = '<thought>';
+            const thoughtEndTag = '</thought>';
+            
+            const startIndex = processedText.indexOf(thoughtStartTag);
+            const endIndex = processedText.indexOf(thoughtEndTag);
+
+            if (startIndex !== -1) {
+                const preText = processedText.substring(0, startIndex).trim();
+                if (preText) {
+                    preThought.innerHTML = marked.parse(preText);
+                    preThought.classList.remove('hidden');
+                }
+                thoughtContainer.classList.remove('hidden');
+                if (endIndex !== -1) {
+                    thoughtContent.innerText = processedText.substring(startIndex + thoughtStartTag.length, endIndex).trim();
+                    const postText = processedText.substring(endIndex + thoughtEndTag.length).trim();
+                    if (postText) {
+                        contentText.innerHTML = marked.parse(postText);
+                    }
+                } else {
+                    thoughtContent.innerText = processedText.substring(startIndex + thoughtStartTag.length).trim();
+                    contentText.innerHTML = '';
+                }
+            } else {
+                preThought.classList.add('hidden');
+                thoughtContainer.classList.add('hidden');
+                contentText.innerHTML = marked.parse(processedText);
+            }
+        }
+
+        window.toggleThisThought = (header) => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.fa-chevron-right');
+            content.classList.toggle('hidden');
+            icon.classList.toggle('rotate-90');
+        };
+
+        function createHumanBubble(text) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-end';
+            div.innerHTML = `
+                <div class="chat-bubble bg-blue-600 text-white p-4 rounded-2xl rounded-tr-none shadow-md shadow-blue-100">
+                    <p class="leading-relaxed">${text}</p>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text || isProcessing) return;
+
+            createHumanBubble(text);
+            ws.send(JSON.stringify({ content: text }));
+            
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            isProcessing = true;
+        }
+
+        sendBtn.onclick = sendMessage;
+        userInput.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        };
+        userInput.oninput = function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        };
+
+        clearBtn.onclick = () => {
+            if (confirm('确定要清除所有对话记录吗？')) {
+                ws.send(JSON.stringify({ content: '/clear' }));
+                chatContainer.innerHTML = '';
+                accumulatedText = "";
+                alert('记忆已清除。');
+            }
+        };
+
+        toggleThought.onchange = () => {
+            const bubbles = document.querySelectorAll('.chat-bubble');
+            bubbles.forEach(b => {
+                if (toggleThought.checked) b.classList.remove('hidden-thought');
+                else b.classList.add('hidden-thought');
+            });
+        };
+
+        openSkills.onclick = () => skillsPanel.classList.remove('-translate-x-full');
+        closeSkills.onclick = () => skillsPanel.classList.add('-translate-x-full');
+
+        connect();
+    </script>
+</body>
+</html>

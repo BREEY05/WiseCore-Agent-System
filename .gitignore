@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+agent_core/data/chat_history.json
+agent_core/static/images/
+skills_server/data/images/
+ollama/
+node_modules/
+.vscode/
+.idea/
+*.log
+*.tmp
+temp_*/
