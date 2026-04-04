@@ -5,9 +5,9 @@ agent_core/data/chat_history.json
 agent_core/static/images/
 skills_server/data/images/
 ollama/
-# node_modules/
+node_modules/
 .vscode/
 .idea/
 *.log
 *.tmp
-temp_*/
+temp_/temp_*/
