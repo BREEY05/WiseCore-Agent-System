@@ -93,10 +93,39 @@ my_agent/
 - **已集成服务**：GitHub、McDonald's (远程)、本地文件系统。
 
 ### 2. 强大的技能库 (Skills)
-- ✨ **图像生成**：集成字节跳动 Seedream API，支持高精度图片生成与实时预览。
-- 📄 **文档自动化**：支持 Word (docx)、PowerPoint (pptx)、PDF、Excel (xlsx) 的自动创建与编辑。
-- 🎨 **前端设计**：能够直接生成生产级别的 UI 组件。
-- 🎬 **可视化增强**：集成 ManimGL 和 Remotion，支持数学动画与视频生成。
+
+**skills_server** 是本系统的核心技能服务层，提供了丰富的 MCP 技能插件：
+
+#### 📁 skills_server 目录结构
+```
+skills_server/
+├── skill_server.py          # 本地 MCP 技能服务器主程序
+└── skills/                  # 技能插件库
+    ├── article_illustration_generator/  # 文章插图生成器
+    ├── docx/                # Word 文档处理技能
+    ├── frontend_design/     # 前端设计技能
+    ├── image-generator/     # 基础图片生成
+    ├── imagen/              # Imagen 图片生成
+    ├── knowledge_2_web/     # 知识库转网页
+    └── manimgl_best_practices/  # ManimGL 数学动画
+```
+
+#### 🔧 已集成的技能
+
+- ✨ **图像生成系列**：
+  - `image_generator.py` - 集成字节跳动 Seedream API
+  - `imagen/` - Google Imagen 图片生成
+  - `article_illustration_generator/` - 专为文章生成插图
+  
+- 📄 **文档处理系列**：
+  - `docx/` - Word 文档创建与编辑
+  - `knowledge_2_web/` - 将知识库转换为网页
+  
+- 🎨 **设计与可视化**：
+  - `frontend_design/` - 生产级 UI 组件生成
+  - `manimgl_best_practices/` - 数学动画可视化（集成 3Blue1Brown 的 ManimGL）
+
+所有技能都遵循 MCP 协议标准，支持动态发现和热插拔。
 
 ### 3. 智能对话体验
 - **思考透明化**：通过 `<thought>` 标签展示 AI 的思考过程，前端支持实时折叠。
