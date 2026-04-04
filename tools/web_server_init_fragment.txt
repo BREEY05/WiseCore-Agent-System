@@ -1,0 +1,87 @@
+    async def initialize(self):
+        print("🔌 正在连接 MCP Servers...")
+        import httpx
+        from types import SimpleNamespace
+        
+        await self.stack.__aenter__()
+        for server_name, config in SERVERS_CONFIG.items():
+            try:
+                print(f"  Attempting to connect to {server_name} (Type: {config.get('type', 'stdio')})...")
+                
+                session = None
+                mcp_tools = None
+
+                if config.get("type") == "sse":
+                    # 特殊处理麦当劳的 streamablehttp
+                    if "mcd.cn" in config["url"]:
+                        print(f"  🍟 发现麦当劳 MCP，正在使用兼容模式连接...")
+                        
+                        async def mcd_call(name, args):
+                            async with httpx.AsyncClient(timeout=30.0) as client:
+                                payload = {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": name, "arguments": args}, "id": 1}
+                                r = await client.post(config["url"], headers=config["headers"], json=payload)
+                                if r.status_code == 200:
+                                    res_json = r.json()
+                                    if "result" in res_json:
+                                        # 兼容麦当劳返回的内容格式
+                                        content_data = res_json["result"].get("content", [])
+                                        return SimpleNamespace(content=[SimpleNamespace(text=c.get("text", str(c))) for c in content_data])
+                                raise Exception(f"麦当劳工具调用失败: {r.text}")
+
+                        async def mcd_list():
+                            async with httpx.AsyncClient(timeout=30.0) as client:
+                                r = await client.post(config["url"], headers=config["headers"], json={
+                                    "jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 1
+                                })
+                                if r.status_code == 200:
+                                    tools_raw = r.json().get("result", {}).get("tools", [])
+                                    return SimpleNamespace(tools=[
+                                        SimpleNamespace(
+                                            name=t["name"], 
+                                            description=t.get("description", ""), 
+                                            inputSchema=t.get("inputSchema", {"type": "object", "properties": {}})
+                                        ) for t in tools_raw
+                                    ])
+                                raise Exception(f"获取麦当劳工具列表失败: {r.status_code}")
+
+                        mcp_tools = await mcd_list()
+                        session = SimpleNamespace(
+                            call_tool=mcd_call,
+                            list_tools=lambda: mcp_tools,
+                            initialize=lambda: asyncio.sleep(0)
+                        )
+                    else:
+                        # 标准 SSE
+                        read, write = await self.stack.enter_async_context(sse_client(url=config["url"], headers=config.get("headers")))
+                        session = await self.stack.enter_async_context(ClientSession(read, write))
+                        await session.initialize()
+                        mcp_tools = await session.list_tools()
+                else:
+                    # 默认 stdio
+                    server_params = StdioServerParameters(
+                        command=config["command"],
+                        args=config["args"],
+                        env=config.get("env", os.environ.copy())
+                    )
+                    read, write = await self.stack.enter_async_context(stdio_client(server_params))
+                    session = await self.stack.enter_async_context(ClientSession(read, write))
+                    await session.initialize()
+                    mcp_tools = await session.list_tools()
+
+                if session and mcp_tools:
+                    self.sessions[server_name] = session
+                    for t in mcp_tools.tools:
+                        self.tool_to_session_map[t.name] = server_name
+                        self.all_tools_for_llm.append({
+                            "type": "function",
+                            "function": {
+                                "name": t.name,
+                                "description": t.description,
+                                "parameters": t.inputSchema
+                            }
+                        })
+                    print(f" ✅ {server_name} 已成功连接，加载了 {len(mcp_tools.tools)} 个工具")
+            except Exception as e:
+                import traceback
+                print(f" ❌ {server_name} 失败: {str(e)}")
+                print(f" 🔍 详细堆栈: {traceback.format_exc()}")
